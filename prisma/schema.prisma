@@ -1,0 +1,56 @@
+// Prisma schema for the AR 3D product visualization MVP.
+//
+// Design notes:
+// - `id` is a stable CUID and is the ONLY identifier used in the public URL
+//   (/view/<id>) and in QR codes. It never changes, even when the GLB is
+//   replaced, so QR codes stay valid for the life of the product.
+// - The GLB is referenced by an opaque storage key (`modelKey`), not a public
+//   URL. The public-facing model URL is always the stable app route
+//   `/api/products/<id>/model`, which streams the current GLB from storage.
+//   This keeps the storage location hidden and swappable (local FS today,
+//   S3-compatible later) without touching product pages, QR codes, or the DB.
+// - Model generation (image/video -> 3D, photogrammetry, etc.) is intentionally
+//   OUT of scope. A GLB is assumed to already exist. To evolve toward generated
+//   models later, an upstream process only needs to produce a GLB and hand it to
+//   the same upload/storage flow; nothing in this schema couples to a generator.
+// - Single GLB per product for the MVP. To support variants later, the model
+//   fields below can be extracted into a `ProductModel` table with a relation,
+//   without restructuring the Product identity, URLs, or QR system.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Product {
+  id          String  @id @default(cuid())
+  name        String
+  description String  @default("")
+
+  // --- Model (single GLB for MVP) ---
+  // Opaque storage key for the current GLB. Null until a model is uploaded.
+  modelKey          String?
+  // Original filename as uploaded, for admin display only.
+  modelOriginalName String?
+  // Stored content type (normally "model/gltf-binary").
+  modelContentType  String?
+  // Size in bytes. BigInt because we do not cap upload size for the MVP.
+  modelSizeBytes    BigInt?
+  // When the model was last uploaded/replaced. Used to cache-bust the stable
+  // public model URL so a replaced GLB is picked up immediately.
+  modelUpdatedAt    DateTime?
+
+  // Optional preview image (reserved for future use).
+  thumbnailUrl String?
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive])
+  @@index([createdAt])
+}
