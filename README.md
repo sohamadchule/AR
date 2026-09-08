@@ -66,8 +66,50 @@ See [`.env.example`](.env.example). Summary:
 | `npm run db:push`   | Push the schema to the database. |
 | `npm run db:studio` | Open Prisma Studio. |
 
+## Uploading a model
+
+1. Sign in at `/admin` (or `/admin/login`) with `ADMIN_PASSWORD`.
+2. **New product** → enter name/description → choose a `.glb` file → **Create**.
+3. On the product page you get a stable public URL, a QR code (preview +
+   PNG/SVG download), a 3D preview, and a **Replace model** control.
+
+Replacing the model **keeps the same public URL and QR code** — the QR always
+points to `/view/<id>`, never the model file.
+
+## Testing AR
+
+See [`docs/AR.md`](docs/AR.md). In short: desktop shows the 3D viewer with an
+"AR unavailable" message; on a phone (Android Chrome → Scene Viewer, iOS Safari →
+Quick Look) a **View in AR** button appears once the model loads. Real devices
+require the page be served over **HTTPS** (tunnel the dev server or deploy).
+
+## Known limitations (MVP)
+
+- **3D model generation is out of scope** — a valid GLB must already exist.
+- **On-device AR requires HTTPS**; `localhost` only covers desktop 3D.
+- **iOS Quick Look** works best with a USDZ; the schema/component already accept
+  an optional `iosSrc`, but no GLB→USDZ conversion is performed.
+- **Single GLB per product** (schema is designed to extend to variants).
+- **Auth is a single shared password** — right-sized for the MVP, not multi-user.
+- **Local filesystem storage** by default; S3-compatible storage is a drop-in
+  adapter but not yet implemented.
+- **No range requests** on the model stream (whole-file GET), which is fine for
+  `<model-viewer>`.
+
+## Future: 3D generation
+
+Generation is intentionally decoupled and sits **upstream**:
+
+```
+Image/Video → 3D generation → GLB → [ this app: product · QR · viewer · AR ]
+```
+
+To add it later, an upstream process only needs to **produce a GLB and hand it to
+the existing upload/storage flow** (`POST /api/products/:id/model`). Product
+pages, QR codes, the database schema, the 3D viewer, and the AR experience are
+reused unchanged. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
 ## Status
 
-Under active milestone development. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
-for the full design, the admin/public boundary, and how a future 3D-generation
-pipeline plugs in upstream without changing the product/QR/viewer/AR system.
+MVP complete through end-to-end integration (`npm run test:e2e` — 18/18). See
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full design.
