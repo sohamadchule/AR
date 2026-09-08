@@ -61,6 +61,7 @@ See [`.env.example`](.env.example). Summary:
 | `npm start`         | Run the production build. |
 | `npm run lint`      | ESLint. |
 | `npm run typecheck` | `tsc --noEmit`. |
+| `npm run test:e2e` | End-to-end pipeline test (needs the app running + `E2E_GLB=/path/to/model.glb`). |
 | `npm run db:generate` | Generate the Prisma client. |
 | `npm run db:push`   | Push the schema to the database. |
 | `npm run db:studio` | Open Prisma Studio. |
