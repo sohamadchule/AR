@@ -75,8 +75,14 @@ export default function ViewerDemoPage() {
       </div>
 
       <div className="aspect-square w-full overflow-hidden rounded-xl border border-black/10 bg-neutral-100 dark:border-white/10 dark:bg-neutral-900 sm:aspect-video">
-        <ModelViewer src={src} alt="Demo 3D model" />
+        <ModelViewer src={src} alt="Demo 3D model" ar autoRotate />
       </div>
+      <p className="text-xs opacity-50">
+        AR is enabled here. On a supported phone (Android/Chrome or iOS/Safari)
+        a &ldquo;View in AR&rdquo; button appears once the model loads; on
+        unsupported devices you&rsquo;ll see a message instead, and the 3D viewer
+        keeps working.
+      </p>
     </main>
   );
 }

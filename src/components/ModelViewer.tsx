@@ -5,6 +5,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { ModelViewerElement } from "@/types/model-viewer";
 
 type Status = "loading" | "loaded" | "error";
+type ArStatus =
+  | "not-presenting"
+  | "session-started"
+  | "object-placed"
+  | "failed";
 
 export interface ModelViewerProps {
   /** URL of the GLB to load (e.g. the stable /api/products/<id>/model route). */
@@ -15,22 +20,28 @@ export interface ModelViewerProps {
   poster?: string;
   /** Extra classes for the outer container. */
   className?: string;
-  /** Enable AR affordances (Scene Viewer / Quick Look). Off by default. */
+  /** Enable AR affordances (Scene Viewer / Quick Look / WebXR). */
   ar?: boolean;
-  /** Optional iOS USDZ source for Quick Look (falls back to GLB otherwise). */
+  /** Optional iOS USDZ source for Quick Look. */
   iosSrc?: string;
   /** Auto-rotate the model when idle. */
   autoRotate?: boolean;
+  /** Render the built-in "View in AR" button / unavailable message. */
+  showArButton?: boolean;
+  /** Notified when AR availability is determined (after the model loads). */
+  onArAvailabilityChange?: (supported: boolean) => void;
 }
 
 /**
- * Reusable 3D viewer built on <model-viewer>.
+ * Reusable 3D + AR viewer built on <model-viewer>.
  *
  * Loads the web component on the client only, exposes camera controls
- * (rotate/zoom/pan), and handles loading, progress, load failure (missing /
- * corrupted model or network/storage error), retry, and camera reset. The same
- * component powers both the admin preview and the public product page; AR is a
- * prop so the public page can turn it on.
+ * (rotate/zoom/pan), and handles loading, load failure, retry, and camera reset.
+ * When `ar` is set, it wires platform AR (Scene Viewer on Android, Quick Look on
+ * iOS, WebXR where available), detects support after the model loads, and — when
+ * `showArButton` is on — renders a prominent "View in AR" button or a clear
+ * "AR unavailable" message. The 3D viewer always keeps working regardless of AR
+ * support.
  */
 export default function ModelViewer({
   src,
@@ -40,11 +51,15 @@ export default function ModelViewer({
   ar = false,
   iosSrc,
   autoRotate = false,
+  showArButton = true,
+  onArAvailabilityChange,
 }: ModelViewerProps) {
   const ref = useRef<ModelViewerElement>(null);
   const [defined, setDefined] = useState(false);
   const [status, setStatus] = useState<Status>("loading");
   const [progress, setProgress] = useState(0);
+  const [arSupported, setArSupported] = useState<boolean | null>(null);
+  const [arStatus, setArStatus] = useState<ArStatus>("not-presenting");
 
   // Register the custom element on the client only.
   useEffect(() => {
@@ -65,6 +80,7 @@ export default function ModelViewer({
   useEffect(() => {
     setStatus("loading");
     setProgress(0);
+    setArSupported(null);
   }, [src]);
 
   // Wire model-viewer events once the element is present.
@@ -72,7 +88,14 @@ export default function ModelViewer({
     const el = ref.current;
     if (!el || !defined) return;
 
-    const onLoad = () => setStatus("loaded");
+    const onLoad = () => {
+      setStatus("loaded");
+      if (ar) {
+        const supported = Boolean(el.canActivateAR);
+        setArSupported(supported);
+        onArAvailabilityChange?.(supported);
+      }
+    };
     const onError = () => setStatus("error");
     const onProgress = (event: Event) => {
       const detail = (event as CustomEvent<{ totalProgress?: number }>).detail;
@@ -80,16 +103,22 @@ export default function ModelViewer({
         setProgress(Math.round(detail.totalProgress * 100));
       }
     };
+    const onArStatus = (event: Event) => {
+      const detail = (event as CustomEvent<{ status?: ArStatus }>).detail;
+      if (detail?.status) setArStatus(detail.status);
+    };
 
     el.addEventListener("load", onLoad);
     el.addEventListener("error", onError);
     el.addEventListener("progress", onProgress as EventListener);
+    el.addEventListener("ar-status", onArStatus as EventListener);
     return () => {
       el.removeEventListener("load", onLoad);
       el.removeEventListener("error", onError);
       el.removeEventListener("progress", onProgress as EventListener);
+      el.removeEventListener("ar-status", onArStatus as EventListener);
     };
-  }, [defined, src]);
+  }, [defined, src, ar, onArAvailabilityChange]);
 
   const handleReset = useCallback(() => {
     const el = ref.current;
@@ -104,17 +133,21 @@ export default function ModelViewer({
     setStatus("loading");
     setProgress(0);
     if (!el) return;
-    // Force a reload by clearing and re-setting the src attribute.
     el.removeAttribute("src");
     requestAnimationFrame(() => {
       el.setAttribute("src", src);
     });
   }, [src]);
 
+  const handleActivateAr = useCallback(() => {
+    ref.current?.activateAR();
+  }, []);
+
   return (
     <div
       className={`relative h-full w-full overflow-hidden ${className ?? ""}`}
       data-status={status}
+      data-ar-status={arStatus}
     >
       {defined && (
         <model-viewer
@@ -142,7 +175,10 @@ export default function ModelViewer({
             height: "100%",
             backgroundColor: "transparent",
           }}
-        />
+        >
+          {/* Suppress model-viewer's default AR button; we manage AR ourselves. */}
+          {ar && <div slot="ar-button" style={{ display: "none" }} />}
+        </model-viewer>
       )}
 
       {status === "loading" && (
@@ -184,11 +220,30 @@ export default function ModelViewer({
         <button
           type="button"
           onClick={handleReset}
-          className="absolute bottom-3 right-3 rounded-full bg-black/60 px-3 py-1.5 text-xs font-medium text-white backdrop-blur transition-opacity hover:opacity-80"
+          className="absolute right-3 top-3 rounded-full bg-black/60 px-3 py-1.5 text-xs font-medium text-white backdrop-blur transition-opacity hover:opacity-80"
           aria-label="Reset camera view"
         >
           Reset view
         </button>
+      )}
+
+      {ar && showArButton && status === "loaded" && (
+        <div className="absolute inset-x-0 bottom-0 flex flex-col items-center gap-1 p-3">
+          {arSupported ? (
+            <button
+              type="button"
+              onClick={handleActivateAr}
+              className="flex items-center gap-2 rounded-full bg-foreground px-6 py-3 text-sm font-semibold text-background shadow-lg transition-transform active:scale-95"
+            >
+              <span aria-hidden>◈</span> View in AR
+            </button>
+          ) : arSupported === false ? (
+            <p className="max-w-xs rounded-full bg-black/60 px-4 py-2 text-center text-xs text-white backdrop-blur">
+              AR isn&apos;t available on this device or browser. You can still
+              explore the 3D model above.
+            </p>
+          ) : null}
+        </div>
       )}
     </div>
   );
