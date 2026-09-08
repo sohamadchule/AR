@@ -60,6 +60,16 @@ export default function ModelViewer({
   const [progress, setProgress] = useState(0);
   const [arSupported, setArSupported] = useState<boolean | null>(null);
   const [arStatus, setArStatus] = useState<ArStatus>("not-presenting");
+  const [trackedSrc, setTrackedSrc] = useState(src);
+
+  // Reset visual state when the model source changes (render-time adjustment,
+  // the React-recommended alternative to a resetting effect).
+  if (src !== trackedSrc) {
+    setTrackedSrc(src);
+    setStatus("loading");
+    setProgress(0);
+    setArSupported(null);
+  }
 
   // Register the custom element on the client only.
   useEffect(() => {
@@ -75,13 +85,6 @@ export default function ModelViewer({
       active = false;
     };
   }, []);
-
-  // Reset visual state whenever the model source changes.
-  useEffect(() => {
-    setStatus("loading");
-    setProgress(0);
-    setArSupported(null);
-  }, [src]);
 
   // Wire model-viewer events once the element is present.
   useEffect(() => {
