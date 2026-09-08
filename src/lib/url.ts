@@ -25,3 +25,22 @@ export function resolveBaseUrl(request: Request): string {
 export function buildViewUrl(request: Request, productId: string): string {
   return `${resolveBaseUrl(request)}/view/${productId}`;
 }
+
+type HeaderGetter = { get(name: string): string | null };
+
+/** Same resolution as resolveBaseUrl, for server components using next/headers. */
+export function resolveBaseUrlFromHeaders(headers: HeaderGetter): string {
+  if (env.publicBaseUrl) return env.publicBaseUrl;
+  const host =
+    headers.get("x-forwarded-host") ?? headers.get("host") ?? "localhost:3000";
+  const proto = headers.get("x-forwarded-proto") ?? "http";
+  return `${proto}://${host}`;
+}
+
+/** Build the public /view URL from request headers (server components). */
+export function buildViewUrlFromHeaders(
+  headers: HeaderGetter,
+  productId: string,
+): string {
+  return `${resolveBaseUrlFromHeaders(headers)}/view/${productId}`;
+}
