@@ -1,4 +1,5 @@
 import { jsonError, requireAdmin } from "@/lib/api";
+import { isAdmin } from "@/lib/auth-server";
 import { env } from "@/lib/env";
 import {
   ACCEPTED_UPLOAD_CONTENT_TYPES,
@@ -7,7 +8,6 @@ import {
   modelStorageKey,
 } from "@/lib/model";
 import {
-  getActiveProductById,
   getProductById,
   setProductModel,
   toAdminProduct,
@@ -26,8 +26,12 @@ type RouteContext = { params: Promise<{ id: string }> };
  */
 export async function GET(_request: Request, context: RouteContext) {
   const { id } = await context.params;
-  const product = await getActiveProductById(id);
+  const product = await getProductById(id);
   if (!product || !product.modelKey) {
+    return jsonError("Model not found", 404);
+  }
+  // Public callers only see active products; admins may preview inactive ones.
+  if (!product.isActive && !(await isAdmin())) {
     return jsonError("Model not found", 404);
   }
 
