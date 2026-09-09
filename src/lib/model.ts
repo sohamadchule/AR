@@ -24,9 +24,19 @@ export const ACCEPTED_UPLOAD_CONTENT_TYPES = [
 /** Magic header bytes at the start of every valid GLB file: ASCII "glTF". */
 export const GLB_MAGIC = new Uint8Array([0x67, 0x6c, 0x54, 0x46]);
 
-/** Deterministic storage key for a product's single GLB. */
-export function modelStorageKey(productId: string): string {
-  return `models/${productId}${GLB_EXTENSION}`;
+/**
+ * Storage key for a freshly uploaded GLB.
+ *
+ * A UNIQUE key is minted for every upload rather than reusing a deterministic
+ * per-product path. Writing to a fresh key means a rejected upload (bad magic
+ * bytes, oversize, aborted connection) can never truncate or delete the model
+ * that is currently live: the previous object is removed only after the
+ * database has been repointed at the new one. Existing rows keep working
+ * because the key is always read from `Product.modelKey`, never recomputed.
+ */
+export function newModelStorageKey(productId: string): string {
+  const stamp = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  return `models/${productId}-${stamp}${GLB_EXTENSION}`;
 }
 
 /** True if a filename ends in `.glb` (case-insensitive). */

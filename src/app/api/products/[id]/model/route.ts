@@ -5,7 +5,7 @@ import {
   ACCEPTED_UPLOAD_CONTENT_TYPES,
   GLB_CONTENT_TYPE,
   isGlbFilename,
-  modelStorageKey,
+  newModelStorageKey,
 } from "@/lib/model";
 import {
   getProductById,
@@ -97,7 +97,11 @@ export async function POST(request: Request, context: RouteContext) {
     return jsonError("Empty upload", 400);
   }
 
-  const key = modelStorageKey(id);
+  // Never write over the live object: mint a new key, and only drop the previous
+  // one once the database points at the replacement. A failed or rejected upload
+  // therefore leaves the currently published model completely untouched.
+  const previousKey = product.modelKey;
+  const key = newModelStorageKey(id);
   const storage = getStorage();
 
   try {
@@ -114,9 +118,13 @@ export async function POST(request: Request, context: RouteContext) {
       await storage.delete(key).catch(() => {});
       return jsonError("Product not found", 404);
     }
+    // The swap is committed — the superseded object is now unreferenced.
+    if (previousKey && previousKey !== key) {
+      await storage.delete(previousKey).catch(() => {});
+    }
     return Response.json({ product: toAdminProduct(updated) });
   } catch (error) {
-    // Remove any partially written object on failure.
+    // Remove only the partially written NEW object; `previousKey` stays live.
     await storage.delete(key).catch(() => {});
 
     if (error instanceof UploadError) {

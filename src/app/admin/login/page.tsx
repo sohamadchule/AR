@@ -6,7 +6,14 @@ import { Suspense, useState } from "react";
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const next = searchParams.get("next") || "/admin";
+  // Only ever redirect to a same-origin path. An unvalidated `next` would let
+  // /admin/login?next=https://evil.example (or the protocol-relative //evil.example)
+  // bounce the operator off-site immediately after a successful sign-in.
+  const requestedNext = searchParams.get("next");
+  const next =
+    requestedNext && /^\/(?![/\\])/.test(requestedNext)
+      ? requestedNext
+      : "/admin";
 
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
